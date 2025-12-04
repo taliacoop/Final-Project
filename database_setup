@@ -1,0 +1,11 @@
+import sqlite3
+import os
+
+# 1 for creating the table, 1 for inserting the data
+# 1 for the calculatoins, and 1 for the visualizations
+# insert or ignore for only 25 items 
+
+def database_setup(databse_name):
+    path = os.path.dirname(os.path.abspath(__file__))
+    conn = sqlite3.connect(path+ "/" + database_name)
+
