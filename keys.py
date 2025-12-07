@@ -1,0 +1,9 @@
+# Weather API Key
+WEATHER_KEY = "d2d43c13f0264846ac3192631250712"
+
+# Airport API Key
+AIRPORT_KEY = "ed02a573426401a69f4c65fc9dd6f0dc6520a42fbe89033ceecdda9669dc7b75740fb606ee40ac376fea9bcba77b8e47"
+
+# AviationStack API Key
+
+AVIATIONSTACK_KEY = "53dcd8cfb7d7f9dd40ea4c8f679b5a58"

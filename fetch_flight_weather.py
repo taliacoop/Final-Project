@@ -9,52 +9,49 @@ from keys import WEATHER_KEY
 conn = sqlite3.connect('airports.db')
 cursor = conn.cursor()
 
-# Create weather_data table if it doesn't exist
-# Use flight_id as PRIMARY KEY to match flights table
+# Create airport_weather_data table if it doesn't exist
+# Use airport_id as PRIMARY KEY to match airport_api_data table
 cursor.execute('''
-    CREATE TABLE IF NOT EXISTS weather_data (
-        flight_id INTEGER PRIMARY KEY,
-        departure_scheduled TEXT,
+    CREATE TABLE IF NOT EXISTS airport_weather_data (
+        airport_id INTEGER PRIMARY KEY,
+        icao TEXT,
         latitude REAL,
         longitude REAL,
-        date TEXT,
         weather_json TEXT,
         status TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (flight_id) REFERENCES flights(id)
+        FOREIGN KEY (airport_id) REFERENCES airport_api_data(id)
     )
 ''')
 conn.commit()
 
-# Get flights that don't have weather data yet, with their departure info and airport coordinates
+# Get airports from airport_api_data that don't have weather data yet
 cursor.execute('''
     SELECT 
-        f.id,
-        f.departure_scheduled,
+        a.id,
+        a.icao,
         a.api_data_json
-    FROM flights f
-    LEFT JOIN airport_api_data a ON f.departure_icao = a.icao
-    LEFT JOIN weather_data w ON f.id = w.flight_id
-    WHERE f.departure_scheduled IS NOT NULL
-    AND w.flight_id IS NULL
+    FROM airport_api_data a
+    LEFT JOIN airport_weather_data w ON a.id = w.airport_id
+    WHERE w.airport_id IS NULL
     LIMIT 25
 ''')
 
 results = cursor.fetchall()
 
 if not results:
-    print("All flights already have weather data!")
+    print("All airports already have weather data!")
     conn.close()
     sys.exit(0)
 
-print(f"Found {len(results)} flights missing weather data")
-print(f"Processing next 25 flights...\n")
+print(f"Found {len(results)} airports missing weather data")
+print(f"Processing next 25 airports...\n")
 
 successful = 0
 failed = 0
 missing_coords = 0
 
-for idx, (flight_id, departure_scheduled, api_data_json) in enumerate(results, 1):
+for idx, (airport_id, icao, api_data_json) in enumerate(results, 1):
     
     latitude = None
     longitude = None
@@ -72,20 +69,14 @@ for idx, (flight_id, departure_scheduled, api_data_json) in enumerate(results, 1
         missing_coords += 1
         # Still insert record with missing coordinates
         cursor.execute('''
-            INSERT OR REPLACE INTO weather_data (flight_id, departure_scheduled, latitude, longitude, date, weather_json, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (flight_id, departure_scheduled, None, None, None, None, 'missing_coordinates'))
+            INSERT OR REPLACE INTO airport_weather_data (airport_id, icao, latitude, longitude, weather_json, status)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (airport_id, icao, None, None, None, 'missing_coordinates'))
         continue
     
-    # Extract date from departure_scheduled (format: 2025-12-07T07:05:00+00:00)
-    try:
-        dt = datetime.fromisoformat(departure_scheduled.replace('Z', '+00:00'))
-        date_str = dt.strftime('%Y-%m-%d')
-    except:
-        date_str = departure_scheduled.split('T')[0] if 'T' in departure_scheduled else departure_scheduled[:10]
-    
-    # Build API URL
-    url = f"https://api.weatherapi.com/v1/history.json?key={WEATHER_KEY}&q={latitude},{longitude}&dt={date_str}"
+    # Get current weather (not historical) for the airport
+    # Using current.json endpoint for real-time weather
+    url = f"https://api.weatherapi.com/v1/current.json?key={WEATHER_KEY}&q={latitude},{longitude}"
     
     weather_json = None
     status = 'success'
@@ -97,33 +88,34 @@ for idx, (flight_id, departure_scheduled, api_data_json) in enumerate(results, 1
         weather_json = json.dumps(weather_data)
         successful += 1
         
-        print(f"✓ Flight {idx}/{len(results)}: Success")
+        print(f"✓ Airport {idx}/{len(results)} ({icao}): Success")
     except requests.exceptions.HTTPError as e:
         status = f'HTTP {response.status_code}'
         failed += 1
+        print(f"✗ Airport {idx}/{len(results)} ({icao}): {status}")
     except requests.exceptions.RequestException as e:
         status = f'Error: {str(e)}'
         failed += 1
+        print(f"✗ Airport {idx}/{len(results)} ({icao}): {status}")
     
-    # Insert weather data into database (using flight_id as primary key)
+    # Insert weather data into database (using airport_id as primary key)
     cursor.execute('''
-        INSERT OR REPLACE INTO weather_data (flight_id, departure_scheduled, latitude, longitude, date, weather_json, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (flight_id, departure_scheduled, latitude, longitude, date_str, weather_json, status))
+        INSERT OR REPLACE INTO airport_weather_data (airport_id, icao, latitude, longitude, weather_json, status)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (airport_id, icao, latitude, longitude, weather_json, status))
 
 conn.commit()
 conn.close()
 
 print(f"\n=== Complete ===")
-print(f"Processed: {len(results)} flights")
+print(f"Processed: {len(results)} airports")
 print(f"Successful: {successful}")
 print(f"Failed: {failed}")
 print(f"Missing coordinates: {missing_coords}")
-print(f"Weather data written to weather_data table in airports.db")
-print(f"\nRemaining flights to process. Run again to process next 25 flights.")
-print(f"\nTo join with flights table, use:")
-print(f"  SELECT f.*, w.weather_json, w.latitude, w.longitude")
-print(f"  FROM flights f")
-print(f"  LEFT JOIN weather_data w ON f.id = w.flight_id")
-print(f"\nNote: weather_data.flight_id is the PRIMARY KEY (same as flights.id)")
-
+print(f"Weather data written to airport_weather_data table in airports.db")
+print(f"\nRemaining airports to process. Run again to process next 25 airports.")
+print(f"\nTo join with airport_api_data table, use:")
+print(f"  SELECT a.*, w.weather_json, w.latitude, w.longitude")
+print(f"  FROM airport_api_data a")
+print(f"  LEFT JOIN airport_weather_data w ON a.id = w.airport_id")
+print(f"\nNote: airport_weather_data.airport_id is the PRIMARY KEY (same as airport_api_data.id)")
