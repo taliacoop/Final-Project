@@ -541,7 +541,6 @@ class FlightDataFetcher:
                 dep_delay = flight.get('departure_delay', '')
                 arr_delay = flight.get('arrival_delay', '')
                 
-                # Convert to integer, use the larger delay value
                 try:
                     dep_delay_int = int(dep_delay) if dep_delay and str(dep_delay).strip() else 0
                 except (ValueError, TypeError):
@@ -555,7 +554,6 @@ class FlightDataFetcher:
                 delay_value = max(dep_delay_int, arr_delay_int)
                 airline_name = flight.get('airline_name', '')
                 
-                # Insert into delayed_flights table
                 cursor.execute('''
                     INSERT INTO delayed_flights (id, delay, airline_name)
                     VALUES (?, ?, ?)
@@ -565,85 +563,25 @@ class FlightDataFetcher:
         conn.commit()
         conn.close()
         
-        print(f"Saved {flights_inserted} new flights to database '{self.db_filename}' (table: flights)")
-        print(f"Skipped {flights_skipped} flights that already exist")
-        print(f"Saved {delayed_inserted} delayed flights to database '{self.db_filename}' (table: delayed_flights)")
-    
-    def save_to_csv(self, flights: List[Dict], filename: str = 'flight_data.csv'):
-        """Save flight data to CSV file"""
-        if not flights:
-            print("No flight data to save.")
-            return
-        
-        # Get all field names from the first flight
-        fieldnames = list(flights[0].keys())
-        
-        with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-            for flight in flights:
-                writer.writerow(flight)
-        
-        print(f"\nSaved {len(flights)} flights to {filename}")
-
-
-def main():
-    """Main function"""
-    output_csv = 'flight_data.csv'
-    db_filename = 'airports.db'
-    
-    print("=" * 60)
-    print("AviationStack Flight Data Fetcher")
-    print("=" * 60)
-    print(f"API Key: {AVIATIONSTACK_KEY[:20]}...")
-    print(f"Output CSV: {output_csv}")
-    print(f"Database: {db_filename} (tables: flights, delayed_flights)")
-    print("=" * 60)
-    print()
-    
-    fetcher = FlightDataFetcher(AVIATIONSTACK_KEY, db_filename)
-    
-    # Fetch 25 flights per run
-    # The script will save ALL flights to flights table, and delayed flights to delayed_flights table
-    # You can add parameters like flight_status='active', dep_iata='JFK', etc.
-    # For example: all_flights, delayed = fetcher.fetch_all_flights(max_total=25, flight_status='active')
-    all_flights, delayed_flights = fetcher.fetch_all_flights(max_total=25)  # Process 25 flights per run
-    
-    # Save to CSV (only delayed flights) and database (all flights + delayed flights table)
-    if delayed_flights:
-        fetcher.save_to_csv(delayed_flights, output_csv)
-        fetcher.save_to_db(all_flights, delayed_flights)
-        
-        # Print summary
-        print(f"\n=== Summary ===")
-        print(f"Total flights fetched: {len(all_flights)}")
-        print(f"Total delayed flights: {len(delayed_flights)}")
-        print(f"Errors: {len(fetcher.errors)}")
-        
-        # Print sample
-        if delayed_flights:
-            print(f"\n=== Sample Delayed Flight ===")
-            sample = delayed_flights[0]
-            print(f"Flight: {sample.get('flight_number', 'N/A')}")
-            print(f"Status: {sample.get('flight_status', 'N/A')}")
-            print(f"Departure: {sample.get('departure_airport', 'N/A')} ({sample.get('departure_iata', 'N/A')})")
-            print(f"Departure Delay: {sample.get('departure_delay', 'N/A')} minutes")
-            print(f"Arrival: {sample.get('arrival_airport', 'N/A')} ({sample.get('arrival_iata', 'N/A')})")
-            print(f"Arrival Delay: {sample.get('arrival_delay', 'N/A')} minutes")
-            print(f"Airline: {sample.get('airline_name', 'N/A')}")
-    else:
-        print("No flights retrieved.")
-    
-    # Save errors if any
-    if fetcher.errors:
-        error_file = 'flight_api_errors.csv'
-        with open(error_file, 'w', newline='', encoding='utf-8') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=['offset', 'error'])
-            writer.writeheader()
-            writer.writerows(fetcher.errors)
-        print(f"\nErrors saved to: {error_file}")
+        print(f"\nDatabase save complete:")
+        print(f"  - Flights inserted: {flights_inserted}")
+        print(f"  - Flights skipped (already exist): {flights_skipped}")
+        print(f"  - Delayed flights inserted: {delayed_inserted}")
 
 
 if __name__ == "__main__":
-    main()
+    # Initialize the fetcher
+    fetcher = FlightDataFetcher(AVIATIONSTACK_KEY)
+    
+    # Fetch flights (default: 25 new flights)
+    all_flights, delayed_flights = fetcher.fetch_all_flights(max_total=25)
+    
+    # Save to database
+    if all_flights:
+        fetcher.save_to_db(all_flights, delayed_flights)
+        print(f"\nTotal flights fetched: {len(all_flights)}")
+        print(f"Delayed flights: {len(delayed_flights)}")
+    else:
+        print("No flights were fetched.")
 
+        
