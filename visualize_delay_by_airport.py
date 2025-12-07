@@ -1,0 +1,45 @@
+import csv
+import matplotlib.pyplot as plt
+
+# Read CSV file
+csv_file = 'avg_delay_by_airport.csv'
+airports = []
+delays = []
+flight_counts = []
+
+with open(csv_file, 'r', encoding='utf-8') as f:
+    reader = csv.DictReader(f)
+    for row in reader:
+        airports.append(row['airport_icao'])
+        delays.append(float(row['average_delay']))
+        flight_counts.append(int(row['flight_count']))
+
+# Sort by delay (descending) for better visualization
+sorted_data = sorted(zip(airports, delays, flight_counts), key=lambda x: x[1], reverse=True)
+airports, delays, flight_counts = zip(*sorted_data)
+
+# Create visualization
+fig, ax = plt.subplots(figsize=(12, 8))
+bars = ax.bar(airports, delays, color='teal', alpha=0.7)
+
+# Add value labels on bars
+for i, (bar, delay, count) in enumerate(zip(bars, delays, flight_counts)):
+    height = bar.get_height()
+    ax.text(bar.get_x() + bar.get_width()/2., height,
+            f'{delay:.1f}\n(n={count})',
+            ha='center', va='bottom', fontsize=8)
+
+ax.set_xlabel('Airport ICAO Code', fontsize=12, fontweight='bold')
+ax.set_ylabel('Average Departure Delay (minutes)', fontsize=12, fontweight='bold')
+ax.set_title('Average Departure Delay by Airport', fontsize=14, fontweight='bold')
+ax.grid(axis='y', alpha=0.3, linestyle='--')
+
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+
+# Save figure
+output_file = 'avg_delay_by_airport.png'
+plt.savefig(output_file, dpi=300, bbox_inches='tight')
+print(f"Visualization saved to {output_file}")
+plt.close()
+
